@@ -11,3 +11,7 @@ dist/
 .env.*
 !.env.example
 coverage.out
+website/node_modules/
+website/.next/
+website/out/
+.netlify/

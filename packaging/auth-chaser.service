@@ -1,0 +1,21 @@
+[Unit]
+Description=auth-chaser self-hosted control plane
+Documentation=https://github.com/Romstar/auth-chaser
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=auth-chaser
+Group=auth-chaser
+ExecStart=/usr/bin/auth-chaser serve --addr :8080 --data-dir /var/lib/auth-chaser
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/auth-chaser
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

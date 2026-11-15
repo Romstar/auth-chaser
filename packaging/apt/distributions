@@ -1,0 +1,7 @@
+Origin: auth-chaser
+Label: auth-chaser
+Codename: stable
+Architectures: amd64 arm64
+Components: main
+Description: auth-chaser apt repository (foundation stub for reprepro)
+SignWith: yes

@@ -1,0 +1,46 @@
+# https://nfpm.goreleaser.com/configuration/
+name: auth-chaser
+arch: ${GOARCH}
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: Romstar <security@example.com>
+description: |
+  Defensive authentication and authorization verification tool.
+  CLI binary and self-hostable SaaS control plane for authorized testing.
+vendor: Romstar
+homepage: https://github.com/Romstar/auth-chaser
+license: Apache-2.0
+contents:
+  - src: ./dist/auth-chaser-linux-${GOARCH}
+    dst: /usr/bin/auth-chaser
+    file_info:
+      mode: 0755
+  - src: ./packaging/auth-chaser.service
+    dst: /usr/lib/systemd/system/auth-chaser.service
+    file_info:
+      mode: 0644
+  - src: ./docs/HOW_TO_USE.md
+    dst: /usr/share/doc/auth-chaser/HOW_TO_USE.md
+    file_info:
+      mode: 0644
+  - src: ./docs/THREAT_MODEL.md
+    dst: /usr/share/doc/auth-chaser/THREAT_MODEL.md
+    file_info:
+      mode: 0644
+  - src: ./LICENSE
+    dst: /usr/share/doc/auth-chaser/LICENSE
+    file_info:
+      mode: 0644
+  - src: ./configs/chase.example.yaml
+    dst: /usr/share/doc/auth-chaser/chase.example.yaml
+    file_info:
+      mode: 0644
+scripts:
+  postinstall: ./packaging/scripts/postinstall.sh
+overrides:
+  deb:
+    depends: []
+  rpm:
+    depends: []

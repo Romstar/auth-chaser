@@ -1,0 +1,6 @@
+[auth-chaser]
+name=auth-chaser
+baseurl=https://rpm.example.com/$releasever/$basearch/
+enabled=1
+gpgcheck=1
+gpgkey=https://rpm.example.com/auth-chaser.gpg

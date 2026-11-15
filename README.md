@@ -6,8 +6,19 @@ auth-chaser ships as:
 
 1. A **Linux CLI binary** for local runs
 2. A **self-hostable SaaS** (`auth-chaser serve`) with HTTP API, job store, and web UI
+3. A **static product website** (`website/`) for docs and install guidance
+4. **`.deb` / `.rpm` packaging** foundations for apt and dnf
 
 It does **not** help attack third-party systems. Unauthorized scanning is prohibited.
+
+## Documentation
+
+| Doc | Purpose |
+|-----|---------|
+| [docs/HOW_TO_USE.md](docs/HOW_TO_USE.md) | Full how-to-use guide |
+| [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | Safety model and non-goals |
+| [docs/PACKAGING.md](docs/PACKAGING.md) | apt/dnf package and repo foundation |
+| Website (`make website-dev`) | Public static site (Netlify) |
 
 ## What it does
 
@@ -28,12 +39,6 @@ Every run requires **explicit authorization confirmation** (`--confirm-authorize
 - Rate limiting + max request budget
 - Secrets via `${ENV}` interpolation; never log raw secrets
 
-See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
-
-## Why Go
-
-One static binary for CLI + server, strong HTTP tooling, easy containers and CI.
-
 ## Install (Linux)
 
 ```bash
@@ -45,6 +50,17 @@ make build && make install   # ~/.local/bin/auth-chaser
 ```bash
 docker compose up --build -d
 ```
+
+### OS packages (foundation)
+
+```bash
+# requires nfpm: https://nfpm.goreleaser.com/install/
+make package
+sudo apt-get install ./dist/auth-chaser_*_amd64.deb   # Debian/Ubuntu
+sudo dnf install ./dist/auth-chaser-*.x86_64.rpm      # Fedora/RHEL
+```
+
+Public apt/dnf repositories are the next publishing step. See [docs/PACKAGING.md](docs/PACKAGING.md).
 
 ## Quick start (CLI)
 
@@ -84,15 +100,24 @@ auth-chaser serve --addr :8080 --data-dir .auth-chaser-data
 - `GET /api/v1/jobs`, `GET /api/v1/jobs/{id}`, `GET /api/v1/jobs/{id}/sarif`
 - `GET /api/v1/packs`
 
+## Website
+
+```bash
+make website-dev   # http://localhost:3000
+make website       # static export → website/out
+```
+
+Root [`netlify.toml`](netlify.toml) builds the static site from `website/`.
+
 ## Architecture
 
 ```
-cmd/auth-chaser
-internal/
-  authz/ browser/ checks/{auth,misconfig,rbac,packs}
-  config/ httpclient/ oauth/ runner/ report/ server/ store/ testapp/
-pkg/types
-configs/ docs/ testdata/
+cmd/auth-chaser          CLI + serve
+internal/                check engine, store, browser
+website/                 Next.js static marketing + docs site
+packaging/               nfpm, systemd, apt/rpm repo stubs
+docs/                    HOW_TO_USE, PACKAGING, threat model
+configs/                 example chase YAML
 ```
 
 ## Example config
