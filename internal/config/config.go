@@ -20,6 +20,15 @@ type Config struct {
 	Auth    AuthConfig    `yaml:"auth" json:"auth"`
 	Browser BrowserConfig `yaml:"browser" json:"browser"`
 	RBAC    RBACConfig    `yaml:"rbac" json:"rbac"`
+	Report  ReportConfig  `yaml:"report" json:"report"`
+}
+
+// ReportConfig selects designed output format and optional file path.
+type ReportConfig struct {
+	// Format is text|json|sarif|html|pdf|csv. Empty defaults to text.
+	Format string `yaml:"format" json:"format"`
+	// Output is an optional file path. Empty writes to stdout.
+	Output string `yaml:"output" json:"output"`
 }
 
 // TargetConfig identifies the application under test.
@@ -220,6 +229,9 @@ func Default() Config {
 			Enabled:  false,
 			Headless: true,
 		},
+		Report: ReportConfig{
+			Format: "text",
+		},
 		Auth: AuthConfig{
 			Password: PasswordConfig{
 				UsernameField: "username",
@@ -289,6 +301,12 @@ func (c *Config) normalize() {
 	if c.Safety.AllowBrowser {
 		c.Browser.Enabled = true
 	}
+	if strings.TrimSpace(c.Report.Format) == "" {
+		c.Report.Format = "text"
+	} else {
+		c.Report.Format = strings.ToLower(strings.TrimSpace(c.Report.Format))
+	}
+	c.Report.Output = strings.TrimSpace(c.Report.Output)
 	c.resolvePacks()
 }
 

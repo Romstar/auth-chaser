@@ -22,6 +22,11 @@ browser:
   headless: true
   chrome_path: ""
 
+# Designed report output. CLI --format / --output override these.
+report:
+  format: text   # text|json|sarif|html|pdf|csv
+  # output: ./auth-chaser-report.html
+
 checks:
   # Explicit packs (recommended). If omitted, packs are inferred from flags/config.
   packs:

@@ -72,6 +72,7 @@ func newCheckCmd() *cobra.Command {
 		target            string
 		confirmAuthorized bool
 		format            string
+		outputPath        string
 		enableAuth        bool
 		enableMisconfig   bool
 		enableRBAC        bool
@@ -128,7 +129,19 @@ func newCheckCmd() *cobra.Command {
 				}
 				cfg.Checks.Packs = cleaned
 			}
+			if cmd.Flags().Changed("format") {
+				cfg.Report.Format = format
+			}
+			if cmd.Flags().Changed("output") {
+				cfg.Report.Output = outputPath
+			}
 			cfg.Normalize()
+
+			outFormat, err := report.NormalizeFormat(cfg.Report.Format)
+			if err != nil {
+				return err
+			}
+			cfg.Report.Format = outFormat
 
 			if !cfg.Safety.ConfirmAuthorized {
 				return fmt.Errorf("authorization not confirmed: set safety.confirm_authorized=true or pass --confirm-authorized")
@@ -146,19 +159,13 @@ func newCheckCmd() *cobra.Command {
 				return err
 			}
 
-			switch format {
-			case "json":
-				if err := report.WriteJSON(os.Stdout, rep); err != nil {
+			if cfg.Report.Output != "" {
+				if err := report.WriteToPath(cfg.Report.Output, cfg.Report.Format, rep); err != nil {
 					return err
 				}
-			case "sarif":
-				if err := report.WriteSARIF(os.Stdout, rep); err != nil {
-					return err
-				}
-			default:
-				if err := report.WriteText(os.Stdout, rep); err != nil {
-					return err
-				}
+				fmt.Fprintf(os.Stderr, "auth-chaser: wrote %s report to %s\n", cfg.Report.Format, cfg.Report.Output)
+			} else if err := report.Write(os.Stdout, cfg.Report.Format, rep); err != nil {
+				return err
 			}
 			if failOnCritical && rep.HasCriticalFail() {
 				return fmt.Errorf("critical findings failed")
@@ -170,7 +177,8 @@ func newCheckCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&cfgPath, "config", "c", "", "Path to chase YAML config")
 	cmd.Flags().StringVarP(&target, "target", "t", "", "Target base URL (overrides config)")
 	cmd.Flags().BoolVar(&confirmAuthorized, "confirm-authorized", false, "Confirm you own or are authorized to test the target")
-	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format: text|json|sarif")
+	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format: text|json|sarif|html|pdf|csv")
+	cmd.Flags().StringVarP(&outputPath, "output", "o", "", "Write report to file (recommended for html/pdf/csv)")
 	cmd.Flags().BoolVar(&enableAuth, "auth", true, "Include auth-related packs when packs unset")
 	cmd.Flags().BoolVar(&enableMisconfig, "misconfig", true, "Include misconfig pack when packs unset")
 	cmd.Flags().BoolVar(&enableRBAC, "rbac", false, "Include RBAC pack when packs unset")

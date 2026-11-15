@@ -103,6 +103,22 @@ auth-chaser check \
   --format json > report.json
 ```
 
+Designed HTML, PDF, or CSV reports (with charts and executive summary):
+
+```bash
+auth-chaser check \
+  --target https://app.example.com \
+  --confirm-authorized \
+  --format html \
+  --output auth-chaser-report.html
+
+auth-chaser check -c chase.yaml --confirm-authorized \
+  --format pdf --output auth-chaser-report.pdf
+
+auth-chaser check -c chase.yaml --confirm-authorized \
+  --format csv --output auth-chaser-report.csv
+```
+
 SARIF for GitHub Code Scanning / CI:
 
 ```bash
@@ -167,7 +183,8 @@ Any `${VAR}` string in config is replaced from the environment. Unset variables 
 | `--target` / `-t` | Override `target.base_url` |
 | `--confirm-authorized` | Assert permission |
 | `--packs` | Comma-separated pack IDs |
-| `--format` | `text`, `json`, or `sarif` |
+| `--format` | `text`, `json`, `sarif`, `html`, `pdf`, or `csv` |
+| `--output` / `-o` | Write report to a file (use for html/pdf/csv) |
 | `--browser` | Enable Chrome automation |
 | `--rbac` | Include RBAC pack when packs are inferred |
 | `--max-requests` | Hard request budget |
@@ -278,6 +295,7 @@ auth-chaser serve --addr :8080 --api-token "$AUTH_CHASER_API_TOKEN"
 | GET | `/api/v1/jobs` | Recent jobs |
 | GET | `/api/v1/jobs/{id}` | Job + report |
 | GET | `/api/v1/jobs/{id}/sarif` | SARIF download |
+| GET | `/api/v1/jobs/{id}/report?format=` | Designed report (`html` default; also `pdf`, `csv`, `json`, `text`, `sarif`) |
 | GET | `/` | Web UI |
 
 Example sync chase:
@@ -339,7 +357,29 @@ jobs:
 
 ## 10. Reading reports
 
-Text output shows status, severity, pack, evidence, and remediation.
+| Format | Use |
+|--------|-----|
+| `text` | Concise terminal summary |
+| `json` | Automation and APIs |
+| `sarif` | CI / code scanning |
+| `html` | Designed assessment report with charts and images |
+| `pdf` | Printable assessment report with charts and images |
+| `csv` | Spreadsheet export of every finding |
+
+Configure defaults in YAML:
+
+```yaml
+report:
+  format: html
+  output: ./auth-chaser-report.html
+```
+
+HTML and PDF reports include:
+
+- Executive summary prose
+- Brand mark and status/severity chart images
+- Priority findings with evidence and remediation
+- Full finding log
 
 JSON fields of interest:
 

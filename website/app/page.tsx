@@ -49,7 +49,7 @@ export default function HomePage() {
         <div className="pack-list">
           <div>
             <code>check</code>
-            <p>Local binary for developers and CI. Text, JSON, or SARIF output.</p>
+            <p>Local binary for developers and CI. Text, JSON, SARIF, HTML, PDF, or CSV reports.</p>
           </div>
           <div>
             <code>serve</code>

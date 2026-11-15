@@ -60,6 +60,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/v1/jobs", s.auth(s.handleJobs))
 	s.mux.HandleFunc("GET /api/v1/jobs/{id}", s.auth(s.handleJob))
 	s.mux.HandleFunc("GET /api/v1/jobs/{id}/sarif", s.auth(s.handleJobSARIF))
+	s.mux.HandleFunc("GET /api/v1/jobs/{id}/report", s.auth(s.handleJobReport))
 	s.mux.HandleFunc("GET /api/v1/reports", s.auth(s.handleReports))
 	s.mux.HandleFunc("GET /", s.handleUI)
 }
@@ -198,17 +199,43 @@ func (s *Server) handleJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleJobSARIF(w http.ResponseWriter, r *http.Request) {
+	s.writeJobReport(w, r.PathValue("id"), report.FormatSARIF)
+}
+
+func (s *Server) handleJobReport(w http.ResponseWriter, r *http.Request) {
+	format := r.URL.Query().Get("format")
+	if format == "" {
+		format = report.FormatHTML
+	}
+	normalized, err := report.NormalizeFormat(format)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	s.writeJobReport(w, r.PathValue("id"), normalized)
+}
+
+func (s *Server) writeJobReport(w http.ResponseWriter, id, format string) {
 	if s.store == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "store unavailable"})
 		return
 	}
-	job, err := s.store.GetJob(r.PathValue("id"))
+	job, err := s.store.GetJob(id)
 	if err != nil || job.Report == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": "report not found"})
 		return
 	}
-	w.Header().Set("Content-Type", "application/sarif+json")
-	_ = report.WriteSARIF(w, job.Report)
+	w.Header().Set("Content-Type", report.ContentType(format))
+	filename := "auth-chaser-" + id + report.FileExtension(format)
+	switch format {
+	case report.FormatPDF, report.FormatCSV:
+		w.Header().Set("Content-Disposition", "attachment; filename=\""+filename+"\"")
+	case report.FormatHTML:
+		w.Header().Set("Content-Disposition", "inline; filename=\""+filename+"\"")
+	}
+	if err := report.Write(w, format, job.Report); err != nil {
+		log.Printf("report write failed for job %s (%s): %v", id, format, err)
+	}
 }
 
 func (s *Server) handleReports(w http.ResponseWriter, _ *http.Request) {
@@ -322,6 +349,9 @@ const uiHTML = `<!DOCTYPE html>
     </form>
     <div class="card">
       <strong>Recent jobs</strong>
+      <p style="color:var(--muted);font-size:0.9rem;margin:0.4rem 0 0.8rem">
+        Download a designed report: <code>/api/v1/jobs/{id}/report?format=html|pdf|csv</code>
+      </p>
       <pre id="jobs">Loading…</pre>
     </div>
     <pre id="out">Submit a chase to see results.</pre>

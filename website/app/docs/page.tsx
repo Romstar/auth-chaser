@@ -52,14 +52,32 @@ auth-chaser check --config chase.yaml`}</pre>
         <code>AUTH_CHASER_API_TOKEN</code>.
       </p>
 
-      <h2>6. CI with SARIF</h2>
+      <h2>6. Designed reports</h2>
+      <p>
+        Choose <code>html</code>, <code>pdf</code>, or <code>csv</code> for shareable output.
+        HTML and PDF include an executive summary plus chart images.
+      </p>
+      <pre>{`auth-chaser check \\
+  --config chase.yaml \\
+  --confirm-authorized \\
+  --format html \\
+  --output auth-chaser-report.html
+
+auth-chaser check -c chase.yaml --confirm-authorized \\
+  --format pdf --output auth-chaser-report.pdf`}</pre>
+      <p>
+        Or set defaults in YAML under <code>report.format</code> and <code>report.output</code>.
+        From the SaaS API: <code>GET /api/v1/jobs/{"{id}"}/report?format=html</code>.
+      </p>
+
+      <h2>7. CI with SARIF</h2>
       <pre>{`auth-chaser check \\
   --config chase.yaml \\
   --confirm-authorized \\
   --format sarif \\
   --fail-on-critical > auth-chaser.sarif`}</pre>
 
-      <h2>7. Browser gaps</h2>
+      <h2>8. Browser gaps</h2>
       <p>
         HTTP covers most packs. For JS login, MFA UI, or passkeys, install Chrome and pass{" "}
         <code>--browser</code>. Checks that need the browser skip cleanly when it is off.

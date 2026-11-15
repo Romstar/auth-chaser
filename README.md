@@ -91,6 +91,12 @@ auth-chaser check \
   --packs auth.core,misconfig.auth \
   --format json
 
+# Designed HTML / PDF / CSV reports
+auth-chaser check -c chase.yaml --confirm-authorized \
+  --format html --output report.html
+auth-chaser check -c chase.yaml --confirm-authorized \
+  --format pdf --output report.pdf
+
 # SARIF for CI
 auth-chaser check -c chase.yaml --confirm-authorized --format sarif --fail-on-critical
 ```
