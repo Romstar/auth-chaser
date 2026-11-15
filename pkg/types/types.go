@@ -27,11 +27,19 @@ const (
 type Status string
 
 const (
-	StatusPass Status = "pass"
-	StatusFail Status = "fail"
-	StatusWarn Status = "warn"
-	StatusSkip Status = "skip"
+	StatusPass  Status = "pass"
+	StatusFail  Status = "fail"
+	StatusWarn  Status = "warn"
+	StatusSkip  Status = "skip"
 	StatusError Status = "error"
+)
+
+// Skip reasons used in Metadata["skip_reason"].
+const (
+	SkipRequiresBrowser = "requires_browser"
+	SkipMissingConfig   = "missing_config"
+	SkipMissingSecret   = "missing_secret"
+	SkipNotApplicable   = "not_applicable"
 )
 
 // Finding is one result from one check.
@@ -44,6 +52,9 @@ type Finding struct {
 	Summary     string            `json:"summary"`
 	Evidence    string            `json:"evidence,omitempty"`
 	Remediation string            `json:"remediation,omitempty"`
+	Pack        string            `json:"pack,omitempty"`
+	Protocol    string            `json:"protocol,omitempty"`
+	CWE         string            `json:"cwe,omitempty"`
 	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
@@ -61,6 +72,7 @@ type Report struct {
 	SkipCount   int       `json:"skip_count"`
 	ErrorCount  int       `json:"error_count"`
 	ToolVersion string    `json:"tool_version"`
+	Packs       []string  `json:"packs,omitempty"`
 }
 
 // Summarize updates aggregate counters from findings.
@@ -80,4 +92,14 @@ func (r *Report) Summarize() {
 			r.ErrorCount++
 		}
 	}
+}
+
+// HasCriticalFail reports whether any critical finding failed.
+func (r *Report) HasCriticalFail() bool {
+	for _, f := range r.Findings {
+		if f.Status == StatusFail && f.Severity == SeverityCritical {
+			return true
+		}
+	}
+	return false
 }

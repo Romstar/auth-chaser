@@ -3,41 +3,93 @@
 
 target:
   base_url: https://app.example.com
-  # Defaults to the host of base_url when omitted.
   allowed_hosts:
     - app.example.com
-  # "/" allows all paths under the host. Narrow this in production use.
   allowed_paths:
     - /
 
 safety:
-  # Required. The run aborts without this confirmation.
   confirm_authorized: false
-  max_requests: 50
+  max_requests: 80
   requests_per_second: 2
   timeout: 10s
-  # Always forced to false by the tool.
   destructive: false
+  allow_post: true
+  allow_browser: false
+
+browser:
+  enabled: false
+  headless: true
+  chrome_path: ""
 
 checks:
+  # Explicit packs (recommended). If omitted, packs are inferred from flags/config.
+  packs:
+    - auth.core
+    - auth.oauth2
+    - auth.password
+    - misconfig.auth
+    # - auth.mfa
+    # - auth.passkey
+    # - rbac.matrix
   auth: true
   misconfig: true
   rbac: false
 
-# Enable checks.rbac and supply role tokens for authorization verification.
+auth:
+  oauth2:
+    client_id: my-app
+    client_secret: ${AUTH_CHASER_CLIENT_SECRET}
+    redirect_uri: https://app.example.com/oauth/callback
+    scopes: [openid, profile]
+    public_client: false
+  oidc:
+    discovery_url: ""
+    id_token: ${AUTH_CHASER_ID_TOKEN}
+    expected_aud: my-app
+    expected_iss: https://idp.example.com
+  password:
+    login_url: /login
+    logout_url: /logout
+    protected_path: /api/me
+    username: test-user
+    password: ${AUTH_CHASER_PASSWORD}
+    username_field: username
+    password_field: password
+    csrf_field: csrf
+  mfa:
+    totp_secret: ${AUTH_CHASER_TOTP}
+    challenge_url: /mfa
+    required_roles: [admin]
+    bypass_paths: [/app]
+  passkey:
+    enabled: false
+    options_url: /webauthn/login/options
+    require_user_verification: true
+
 rbac:
+  protected_paths:
+    - /api/me
+    - /api/admin
   roles:
     - name: viewer
-      bearer_token: "REPLACE_ME"
+      bearer_token: ${AUTH_CHASER_VIEWER_TOKEN}
       allowed_paths:
         - /api/me
         - /api/items
       denied_paths:
         - /api/admin
     - name: admin
-      bearer_token: "REPLACE_ME"
+      bearer_token: ${AUTH_CHASER_ADMIN_TOKEN}
       allowed_paths:
         - /api/me
         - /api/items
         - /api/admin
       denied_paths: []
+  object_tests:
+    - name: viewer-cannot-read-other-user
+      actor_role: viewer
+      owner_role: admin
+      path: /api/users/other
+      expect_deny: true
+  # matrix_file: configs/rbac-matrix.csv

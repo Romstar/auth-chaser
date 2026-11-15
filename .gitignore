@@ -1,5 +1,6 @@
 bin/
 dist/
+.auth-chaser-data/
 *.exe
 *.test
 *.out

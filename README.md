@@ -5,7 +5,7 @@ Open-source, **defensive** authentication and authorization verification for app
 auth-chaser ships as:
 
 1. A **Linux CLI binary** for local runs
-2. A **self-hostable SaaS** (`auth-chaser serve`) with HTTP API + web UI
+2. A **self-hostable SaaS** (`auth-chaser serve`) with HTTP API, job store, and web UI
 
 It does **not** help attack third-party systems. Unauthorized scanning is prohibited.
 
@@ -13,153 +13,91 @@ It does **not** help attack third-party systems. Unauthorized scanning is prohib
 
 | Goal | How |
 |------|-----|
-| Confirm auth works as intended | Checks HTTPS, OIDC discovery, login surface reachability (more providers planned: OAuth2, passwords, passkeys, MFA) |
-| Find auth misconfigurations | Non-destructive probes: security headers, cookie flags, dangerous CORS |
-| Verify authorization / RBAC | Role tokens + expected allow/deny paths |
+| Confirm auth works as intended | Packs for core surface, OAuth2/OIDC, password sessions, MFA, passkeys |
+| Find auth misconfigurations | Headers, cookies, CORS, open redirects, state/nonce, JWT signals, cache, rate-limit headers |
+| Verify authorization / RBAC | Role matrices, anonymous baseline, horizontal object tests |
+
+HTTP-first. Optional Chrome (`--browser`) fills JS login, MFA UI, and passkey gaps.
 
 ## Safety by design
 
 Every run requires **explicit authorization confirmation** (`--confirm-authorized` or `safety.confirm_authorized: true`).
 
-- **Non-destructive only** — GET / HEAD / OPTIONS; no write/delete probes
-- **Scope limits** — `allowed_hosts` and `allowed_paths`
-- **Rate limiting** — `requests_per_second` + `max_requests`
-- **Request cap** — hard stop when the budget is exhausted
+- Non-destructive methods (GET/HEAD/OPTIONS; allowlisted POST for happy-path only)
+- Scope limits (`allowed_hosts`, `allowed_paths`)
+- Rate limiting + max request budget
+- Secrets via `${ENV}` interpolation; never log raw secrets
+
+See [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
 
 ## Why Go
 
-| Requirement | Go fit |
-|-------------|--------|
-| Single installable Linux binary | Static compile, trivial `make install` |
-| CLI + self-hosted server in one artifact | One binary, two commands: `check` and `serve` |
-| Concurrent, rate-limited HTTP checks | Goroutines + standard library networking |
-| Security-tooling ecosystem | Mature HTTP, OAuth/OIDC, YAML, container story |
-| Easy self-hosting | Tiny container image, no runtime language VM |
-
-Rust was considered for memory safety; Go wins here for shipping a dual-mode security CLI/server faster with a smaller ops surface.
-
-## Architecture
-
-```
-cmd/auth-chaser          CLI entry (check | serve | version)
-internal/
-  authz/                 Authorization gate + URL scope
-  config/                YAML + flag config
-  httpclient/            Scoped, rate-limited HTTP (safe methods only)
-  checks/
-    auth/                Authentication verification
-    misconfig/           Misconfiguration probes
-    rbac/                Authorization / RBAC probes
-  runner/                Orchestrates a chase run
-  report/                Text + JSON output
-  server/                Self-hostable API + UI
-pkg/types                Shared finding/report types
-configs/                 Example chase YAML
-```
-
-**Modes**
-
-- `check` — local binary against a target (CI-friendly JSON)
-- `serve` — long-running control plane; `POST /api/v1/chase` runs the same engine
-
-Same check engine. Same safety gate. Two delivery surfaces.
+One static binary for CLI + server, strong HTTP tooling, easy containers and CI.
 
 ## Install (Linux)
-
-### From source
 
 ```bash
 git clone git@github.com:Romstar/auth-chaser.git
 cd auth-chaser
-make build          # writes bin/auth-chaser
-make install        # installs to ~/.local/bin/auth-chaser
+make build && make install   # ~/.local/bin/auth-chaser
 ```
-
-Ensure `~/.local/bin` is on your `PATH`.
-
-### Docker (self-hosted SaaS)
 
 ```bash
 docker compose up --build -d
-# UI:  http://localhost:8080/
-# API: POST http://localhost:8080/api/v1/chase
 ```
 
 ## Quick start (CLI)
 
 ```bash
-# Copy and edit the example config
-cp configs/chase.example.yaml chase.yaml
-# Set target.base_url and safety.confirm_authorized: true
+auth-chaser list-checks
 
-auth-chaser check --config chase.yaml
-
-# Or fully via flags:
 auth-chaser check \
   --target https://app.example.com \
   --confirm-authorized \
+  --packs auth.core,misconfig.auth \
   --format json
+
+# SARIF for CI
+auth-chaser check -c chase.yaml --confirm-authorized --format sarif --fail-on-critical
 ```
 
-Without `--confirm-authorized` (or the YAML equivalent), the run aborts.
+## Packs
 
-## Quick start (self-hosted SaaS)
+| Pack | Focus |
+|------|-------|
+| `auth.core` | HTTPS, login surface, CSRF signals |
+| `auth.oauth2` | OIDC discovery, authorize/token/JWKS/PKCE/ID token claims |
+| `auth.password` | Login success/failure, session flags, logout |
+| `auth.mfa` | Challenge surface, TOTP, bypass paths |
+| `auth.passkey` | WebAuthn options / UV / browser smoke |
+| `misconfig.auth` | Headers, cookies, CORS, redirects, JWT, cache, rate-limit signals |
+| `rbac.matrix` | Anonymous baseline, role paths, object tests, matrix file |
+
+## Self-hosted SaaS
 
 ```bash
-auth-chaser serve --addr :8080
+auth-chaser serve --addr :8080 --data-dir .auth-chaser-data
+# optional: --api-token "$AUTH_CHASER_API_TOKEN"
 ```
 
-Open `http://localhost:8080/`. Confirm ownership/authorization in the UI before a chase runs.
+- `POST /api/v1/chase` — sync report, or `{ "async": true }` → `202` job
+- `GET /api/v1/jobs`, `GET /api/v1/jobs/{id}`, `GET /api/v1/jobs/{id}/sarif`
+- `GET /api/v1/packs`
 
-### API
+## Architecture
 
-```bash
-curl -s http://localhost:8080/api/v1/chase \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "config": {
-      "target": { "base_url": "https://app.example.com" },
-      "safety": { "confirm_authorized": true, "max_requests": 50, "requests_per_second": 2 },
-      "checks": { "auth": true, "misconfig": true, "rbac": false }
-    }
-  }'
+```
+cmd/auth-chaser
+internal/
+  authz/ browser/ checks/{auth,misconfig,rbac,packs}
+  config/ httpclient/ oauth/ runner/ report/ server/ store/ testapp/
+pkg/types
+configs/ docs/ testdata/
 ```
 
 ## Example config
 
 See [`configs/chase.example.yaml`](configs/chase.example.yaml).
-
-## Current checks (v0.1 foundation)
-
-**Auth**
-
-- `auth.https_required`
-- `auth.oidc_discovery`
-- `auth.login_surface`
-
-**Misconfig**
-
-- `misconfig.security_headers`
-- `misconfig.cookie_flags`
-- `misconfig.cors`
-
-**RBAC**
-
-- `rbac.role_access` (requires `rbac.roles` in config)
-
-## Roadmap (next)
-
-- OAuth2 / OIDC flow verification (authorization code, PKCE, token validation)
-- Password login happy-path + lockout/rate-limit observation (non-destructive)
-- Passkey / WebAuthn configuration checks
-- MFA enrollment and step-up presence checks
-- Deeper RBAC matrices and IDOR-style *authorized* access comparisons
-- Persistent job store + multi-tenant SaaS mode
-- Signed install packages (deb/rpm) and GitHub Releases binaries
-
-## Legal / ethics
-
-Use auth-chaser only on systems you own or systems covered by a written authorization (bug bounty scope, contract, internal mandate). The authorization confirmation is a technical control, not a substitute for legal permission.
 
 ## License
 

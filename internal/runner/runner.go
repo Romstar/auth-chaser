@@ -7,17 +7,16 @@ import (
 	"time"
 
 	"github.com/Romstar/auth-chaser/internal/authz"
+	"github.com/Romstar/auth-chaser/internal/browser"
 	"github.com/Romstar/auth-chaser/internal/checks"
-	"github.com/Romstar/auth-chaser/internal/checks/auth"
-	"github.com/Romstar/auth-chaser/internal/checks/misconfig"
-	"github.com/Romstar/auth-chaser/internal/checks/rbac"
+	"github.com/Romstar/auth-chaser/internal/checks/packs"
 	"github.com/Romstar/auth-chaser/internal/config"
 	"github.com/Romstar/auth-chaser/internal/httpclient"
 	"github.com/Romstar/auth-chaser/pkg/types"
 )
 
 // Version is set by main/ldflags.
-var Version = "0.1.0"
+var Version = "0.2.0"
 
 // Runner executes a configured chase.
 type Runner struct {
@@ -42,17 +41,25 @@ func (r *Runner) Run(ctx context.Context) (*types.Report, error) {
 
 	start := time.Now()
 	client := httpclient.New(r.cfg, gate)
-	cctx := checks.Context{Cfg: r.cfg, Client: client}
 
-	reg := checks.NewRegistry()
-	if r.cfg.Checks.Auth {
-		reg.Add(auth.HTTPSRequired{}, auth.OIDCDiscovery{}, auth.LoginSurface{})
+	var br checks.Browser
+	sess, err := browser.Start(ctx, r.cfg, gate)
+	if err != nil {
+		// Chrome missing is non-fatal; browser checks will skip.
+		br = sess
+	} else {
+		br = sess
 	}
-	if r.cfg.Checks.Misconfig {
-		reg.Add(misconfig.SecurityHeaders{}, misconfig.CookieFlags{}, misconfig.CORSMisconfig{})
+	if sess != nil {
+		defer sess.Close()
 	}
-	if r.cfg.Checks.RBAC {
-		reg.Add(rbac.RoleAccess{})
+
+	oidcMeta := &checks.OIDCMeta{}
+	cctx := checks.Context{Cfg: r.cfg, Client: client, Browser: br, OIDC: oidcMeta}
+
+	selected, err := packs.ForPacks(r.cfg.EffectivePacks())
+	if err != nil {
+		return nil, err
 	}
 
 	report := &types.Report{
@@ -61,9 +68,10 @@ func (r *Runner) Run(ctx context.Context) (*types.Report, error) {
 		Authorized:  true,
 		Findings:    make([]types.Finding, 0),
 		ToolVersion: Version,
+		Packs:       r.cfg.EffectivePacks(),
 	}
 
-	for _, check := range reg.All() {
+	for _, check := range selected {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -73,6 +81,7 @@ func (r *Runner) Run(ctx context.Context) (*types.Report, error) {
 				CheckID:  check.ID(),
 				Title:    check.Title(),
 				Category: check.Category(),
+				Pack:     check.Pack(),
 				Severity: types.SeverityMedium,
 				Status:   types.StatusError,
 				Summary:  "Check failed to execute.",
@@ -91,21 +100,20 @@ func (r *Runner) Run(ctx context.Context) (*types.Report, error) {
 
 // PreviewLists returns check IDs that would run for the current config.
 func (r *Runner) PreviewLists() []string {
-	ids := make([]string, 0)
-	if r.cfg.Checks.Auth {
-		ids = append(ids, "auth.https_required", "auth.oidc_discovery", "auth.login_surface")
+	selected, err := packs.ForPacks(r.cfg.EffectivePacks())
+	if err != nil {
+		return nil
 	}
-	if r.cfg.Checks.Misconfig {
-		ids = append(ids, "misconfig.security_headers", "misconfig.cookie_flags", "misconfig.cors")
-	}
-	if r.cfg.Checks.RBAC {
-		ids = append(ids, "rbac.role_access")
+	ids := make([]string, 0, len(selected))
+	for _, c := range selected {
+		ids = append(ids, c.ID())
 	}
 	return ids
 }
 
 // Describe returns a one-line description of the upcoming run.
 func (r *Runner) Describe() string {
-	return fmt.Sprintf("target=%s checks=%v rps=%.1f max_requests=%d",
-		r.cfg.Target.BaseURL, r.PreviewLists(), r.cfg.Safety.RequestsPerSecond, r.cfg.Safety.MaxRequests)
+	return fmt.Sprintf("target=%s packs=%v checks=%d rps=%.1f max_requests=%d browser=%v",
+		r.cfg.Target.BaseURL, r.cfg.EffectivePacks(), len(r.PreviewLists()),
+		r.cfg.Safety.RequestsPerSecond, r.cfg.Safety.MaxRequests, r.cfg.Browser.Enabled || r.cfg.Safety.AllowBrowser)
 }

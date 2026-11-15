@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/Romstar/auth-chaser/internal/checks/packs"
 	"github.com/Romstar/auth-chaser/internal/config"
 	"github.com/Romstar/auth-chaser/internal/report"
 	"github.com/Romstar/auth-chaser/internal/runner"
@@ -16,7 +18,7 @@ import (
 )
 
 var (
-	version = "0.1.0"
+	version = "0.2.0"
 	commit  = "dev"
 )
 
@@ -30,7 +32,7 @@ you own or are authorized to test. Checks are non-destructive, scoped,
 rate-limited, and require an explicit authorization confirmation.`,
 	}
 
-	root.AddCommand(newCheckCmd(), newServeCmd(), newVersionCmd())
+	root.AddCommand(newCheckCmd(), newServeCmd(), newVersionCmd(), newListChecksCmd())
 
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "Error:", err)
@@ -48,6 +50,22 @@ func newVersionCmd() *cobra.Command {
 	}
 }
 
+func newListChecksCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list-checks",
+		Short: "List built-in check packs and check IDs",
+		Run: func(_ *cobra.Command, _ []string) {
+			for _, p := range packs.List() {
+				fmt.Printf("%s — %s\n", p.ID, p.Title)
+				for _, c := range p.Checks {
+					fmt.Printf("  - %s: %s\n", c.ID, c.Title)
+				}
+				fmt.Println()
+			}
+		},
+	}
+}
+
 func newCheckCmd() *cobra.Command {
 	var (
 		cfgPath           string
@@ -59,6 +77,9 @@ func newCheckCmd() *cobra.Command {
 		enableRBAC        bool
 		maxRequests       int
 		rps               float64
+		browser           bool
+		packList          string
+		failOnCritical    bool
 	)
 
 	cmd := &cobra.Command{
@@ -92,6 +113,21 @@ func newCheckCmd() *cobra.Command {
 			if cmd.Flags().Changed("rps") {
 				cfg.Safety.RequestsPerSecond = rps
 			}
+			if browser {
+				cfg.Browser.Enabled = true
+				cfg.Safety.AllowBrowser = true
+			}
+			if packList != "" {
+				parts := strings.Split(packList, ",")
+				cleaned := make([]string, 0, len(parts))
+				for _, p := range parts {
+					p = strings.TrimSpace(p)
+					if p != "" {
+						cleaned = append(cleaned, p)
+					}
+				}
+				cfg.Checks.Packs = cleaned
+			}
 			cfg.Normalize()
 
 			if !cfg.Safety.ConfirmAuthorized {
@@ -100,7 +136,7 @@ func newCheckCmd() *cobra.Command {
 
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
-			ctx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 			defer cancel()
 
 			r := runner.New(cfg)
@@ -112,34 +148,59 @@ func newCheckCmd() *cobra.Command {
 
 			switch format {
 			case "json":
-				return report.WriteJSON(os.Stdout, rep)
+				if err := report.WriteJSON(os.Stdout, rep); err != nil {
+					return err
+				}
+			case "sarif":
+				if err := report.WriteSARIF(os.Stdout, rep); err != nil {
+					return err
+				}
 			default:
-				return report.WriteText(os.Stdout, rep)
+				if err := report.WriteText(os.Stdout, rep); err != nil {
+					return err
+				}
 			}
+			if failOnCritical && rep.HasCriticalFail() {
+				return fmt.Errorf("critical findings failed")
+			}
+			return nil
 		},
 	}
 
 	cmd.Flags().StringVarP(&cfgPath, "config", "c", "", "Path to chase YAML config")
 	cmd.Flags().StringVarP(&target, "target", "t", "", "Target base URL (overrides config)")
 	cmd.Flags().BoolVar(&confirmAuthorized, "confirm-authorized", false, "Confirm you own or are authorized to test the target")
-	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format: text|json")
-	cmd.Flags().BoolVar(&enableAuth, "auth", true, "Run authentication verification checks")
-	cmd.Flags().BoolVar(&enableMisconfig, "misconfig", true, "Run misconfiguration checks")
-	cmd.Flags().BoolVar(&enableRBAC, "rbac", false, "Run RBAC/authorization checks")
-	cmd.Flags().IntVar(&maxRequests, "max-requests", 50, "Maximum outbound HTTP requests")
+	cmd.Flags().StringVarP(&format, "format", "f", "text", "Output format: text|json|sarif")
+	cmd.Flags().BoolVar(&enableAuth, "auth", true, "Include auth-related packs when packs unset")
+	cmd.Flags().BoolVar(&enableMisconfig, "misconfig", true, "Include misconfig pack when packs unset")
+	cmd.Flags().BoolVar(&enableRBAC, "rbac", false, "Include RBAC pack when packs unset")
+	cmd.Flags().IntVar(&maxRequests, "max-requests", 80, "Maximum outbound HTTP requests")
 	cmd.Flags().Float64Var(&rps, "rps", 2, "Requests per second rate limit")
+	cmd.Flags().BoolVar(&browser, "browser", false, "Enable Chrome browser automation for JS/MFA/passkey gaps")
+	cmd.Flags().StringVar(&packList, "packs", "", "Comma-separated pack IDs (overrides defaults)")
+	cmd.Flags().BoolVar(&failOnCritical, "fail-on-critical", false, "Exit non-zero when any critical finding fails")
 	return cmd
 }
 
 func newServeCmd() *cobra.Command {
-	var addr string
+	var (
+		addr     string
+		dataDir  string
+		apiToken string
+	)
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the self-hostable SaaS HTTP API and UI",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			return server.New(addr).ListenAndServe()
+			return server.New(server.Options{
+				Addr:     addr,
+				DataDir:  dataDir,
+				APIToken: apiToken,
+			}).ListenAndServe()
 		},
 	}
 	cmd.Flags().StringVar(&addr, "addr", ":8080", "Listen address")
+	cmd.Flags().StringVar(&dataDir, "data-dir", ".auth-chaser-data", "Directory for SQLite job store")
+	cmd.Flags().StringVar(&apiToken, "api-token", "", "Optional API bearer token (or AUTH_CHASER_API_TOKEN)")
 	return cmd
 }

@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+      - name: Test
+        run: go test ./...
+      - name: Build
+        run: make build
+
+  release-binaries:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+      - name: Cross-compile
+        run: |
+          mkdir -p dist
+          VERSION=$(git rev-parse --short HEAD)
+          for pair in linux/amd64 linux/arm64; do
+            OS=${pair%/*}; ARCH=${pair#*/}
+            CGO_ENABLED=0 GOOS=$OS GOARCH=$ARCH go build -ldflags "-s -w -X main.version=0.2.0 -X main.commit=$VERSION" -o dist/auth-chaser-$OS-$ARCH ./cmd/auth-chaser
+            tar -C dist -czf dist/auth-chaser-$OS-$ARCH.tar.gz auth-chaser-$OS-$ARCH
+          done
+          ls -la dist
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-chaser-binaries
+          path: dist/*.tar.gz

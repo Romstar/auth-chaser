@@ -1,0 +1,17 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Note
+        run: |
+          echo "Production deploy hook placeholder."
+          echo "Wire this workflow to your host (Fly, Railway, VM, k8s) when ready."
+          echo "Image build:"
+          echo "  docker build -t auth-chaser:latest ."
