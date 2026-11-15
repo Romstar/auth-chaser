@@ -32,10 +32,13 @@ jobs:
       - name: Cross-compile
         run: |
           mkdir -p dist
-          VERSION=$(git rev-parse --short HEAD)
+          SHORT=$(git rev-parse --short HEAD)
+          echo "SHORT=${SHORT}" >> "$GITHUB_ENV"
           for pair in linux/amd64 linux/arm64; do
             OS=${pair%/*}; ARCH=${pair#*/}
-            CGO_ENABLED=0 GOOS=$OS GOARCH=$ARCH go build -ldflags "-s -w -X main.version=0.2.0 -X main.commit=$VERSION" -o dist/auth-chaser-$OS-$ARCH ./cmd/auth-chaser
+            CGO_ENABLED=0 GOOS=$OS GOARCH=$ARCH go build -trimpath \
+              -ldflags "-s -w -X main.version=0.2.0 -X main.commit=${SHORT}" \
+              -o dist/auth-chaser-$OS-$ARCH ./cmd/auth-chaser
             tar -C dist -czf dist/auth-chaser-$OS-$ARCH.tar.gz auth-chaser-$OS-$ARCH
           done
           ls -la dist
@@ -44,3 +47,33 @@ jobs:
         with:
           name: auth-chaser-binaries
           path: dist/*.tar.gz
+      - name: Publish GitHub Release (latest)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Rolling "latest" release so the download URL stays stable.
+          NOTES="$(mktemp)"
+          {
+            echo "Automated build from \`main\` (\`${GITHUB_SHA}\`)."
+            echo
+            echo "## Install (linux amd64)"
+            echo
+            echo '```bash'
+            echo 'curl -fsSL -o auth-chaser.tgz \'
+            echo '  https://github.com/Romstar/auth-chaser/releases/latest/download/auth-chaser-linux-amd64.tar.gz'
+            echo 'tar -xzf auth-chaser.tgz'
+            echo 'sudo install -m 755 auth-chaser-linux-amd64 /usr/local/bin/auth-chaser'
+            echo 'auth-chaser version'
+            echo '```'
+            echo
+            echo 'Arm64 tarball: `auth-chaser-linux-arm64.tar.gz`'
+          } > "${NOTES}"
+
+          gh release delete latest --cleanup-tag --yes 2>/dev/null || true
+          gh release create latest \
+            --title "Latest (main @ ${SHORT})" \
+            --notes-file "${NOTES}" \
+            --latest \
+            dist/auth-chaser-linux-amd64.tar.gz \
+            dist/auth-chaser-linux-arm64.tar.gz
+          rm -f "${NOTES}"

@@ -16,6 +16,18 @@ Unauthorized scanning of third-party systems is prohibited. See [THREAT_MODEL.md
 
 ## 2. Install
 
+### Prebuilt binary (no Go required)
+
+Every push to `main` updates the rolling GitHub Release `latest`:
+
+```bash
+curl -fsSL -o auth-chaser.tgz \
+  https://github.com/Romstar/auth-chaser/releases/latest/download/auth-chaser-linux-amd64.tar.gz
+tar -xzf auth-chaser.tgz
+sudo install -m 755 auth-chaser-linux-amd64 /usr/local/bin/auth-chaser
+auth-chaser version
+```
+
 ### From source (Linux)
 
 ```bash

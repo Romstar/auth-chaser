@@ -18,7 +18,7 @@ fi
 
 for GOARCH in amd64 arm64; do
   echo "Building linux/${GOARCH} binary…"
-  CGO_ENABLED=0 GOOS=linux GOARCH="${GOARCH}" go build -ldflags "${LDFLAGS}" \
+  CGO_ENABLED=0 GOOS=linux GOARCH="${GOARCH}" go build -trimpath -ldflags "${LDFLAGS}" \
     -o "dist/auth-chaser-linux-${GOARCH}" ./cmd/auth-chaser
 
   # nfpm expands only a limited set of env vars in some versions; render config explicitly.

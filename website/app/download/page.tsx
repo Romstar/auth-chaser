@@ -40,14 +40,17 @@ sudo dnf install ./dist/auth-chaser-*.x86_64.rpm`}</pre>
       </p>
       <pre>{`sudo dnf install auth-chaser`}</pre>
 
-      <h2>GitHub release binaries</h2>
+      <h2>GitHub release binaries (no Go required)</h2>
       <p>
-        CI publishes linux amd64/arm64 archives on <code>main</code>. Grab the latest from{" "}
-        <a href="https://github.com/Romstar/auth-chaser/releases">Releases</a> or Actions
-        artifacts, then:
+        Every push to <code>main</code> refreshes the rolling{" "}
+        <a href="https://github.com/Romstar/auth-chaser/releases/latest">latest</a> release
+        with linux amd64 and arm64 tarballs.
       </p>
-      <pre>{`tar -xzf auth-chaser-linux-amd64.tar.gz
-sudo install -m 755 auth-chaser-linux-amd64 /usr/local/bin/auth-chaser`}</pre>
+      <pre>{`curl -fsSL -o auth-chaser.tgz \\
+  https://github.com/Romstar/auth-chaser/releases/latest/download/auth-chaser-linux-amd64.tar.gz
+tar -xzf auth-chaser.tgz
+sudo install -m 755 auth-chaser-linux-amd64 /usr/local/bin/auth-chaser
+auth-chaser version`}</pre>
 
       <h2>Packaging details</h2>
       <p>

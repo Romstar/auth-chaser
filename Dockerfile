@@ -5,9 +5,9 @@ RUN apk add --no-cache git ca-certificates
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-ARG VERSION=0.1.0
+ARG VERSION=0.2.0
 ARG COMMIT=docker
-RUN CGO_ENABLED=0 GOOS=linux go build \
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
   -ldflags "-s -w -X main.version=${VERSION} -X main.commit=${COMMIT}" \
   -o /out/auth-chaser ./cmd/auth-chaser
 

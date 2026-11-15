@@ -41,11 +41,29 @@ Every run requires **explicit authorization confirmation** (`--confirm-authorize
 
 ## Install (Linux)
 
+### Prebuilt binary (no Go required)
+
+Every push to `main` publishes a rolling GitHub Release tagged `latest`:
+
+```bash
+curl -fsSL -o auth-chaser.tgz \
+  https://github.com/Romstar/auth-chaser/releases/latest/download/auth-chaser-linux-amd64.tar.gz
+tar -xzf auth-chaser.tgz
+sudo install -m 755 auth-chaser-linux-amd64 /usr/local/bin/auth-chaser
+auth-chaser version
+```
+
+Arm64: replace with `auth-chaser-linux-arm64.tar.gz`.
+
+### From source
+
 ```bash
 git clone git@github.com:Romstar/auth-chaser.git
 cd auth-chaser
 make build && make install   # ~/.local/bin/auth-chaser
 ```
+
+`make build`, Docker, packaging, and CI all use `CGO_ENABLED=0` so the binary is statically linked (no libc/CGO dependency).
 
 ```bash
 docker compose up --build -d
