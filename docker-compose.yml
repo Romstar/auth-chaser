@@ -1,0 +1,7 @@
+services:
+  auth-chaser:
+    build: .
+    ports:
+      - "8080:8080"
+    command: ["serve", "--addr", ":8080"]
+    restart: unless-stopped

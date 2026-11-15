@@ -1,0 +1,43 @@
+# Example chase configuration for auth-chaser.
+# Only test applications you own or have written permission to test.
+
+target:
+  base_url: https://app.example.com
+  # Defaults to the host of base_url when omitted.
+  allowed_hosts:
+    - app.example.com
+  # "/" allows all paths under the host. Narrow this in production use.
+  allowed_paths:
+    - /
+
+safety:
+  # Required. The run aborts without this confirmation.
+  confirm_authorized: false
+  max_requests: 50
+  requests_per_second: 2
+  timeout: 10s
+  # Always forced to false by the tool.
+  destructive: false
+
+checks:
+  auth: true
+  misconfig: true
+  rbac: false
+
+# Enable checks.rbac and supply role tokens for authorization verification.
+rbac:
+  roles:
+    - name: viewer
+      bearer_token: "REPLACE_ME"
+      allowed_paths:
+        - /api/me
+        - /api/items
+      denied_paths:
+        - /api/admin
+    - name: admin
+      bearer_token: "REPLACE_ME"
+      allowed_paths:
+        - /api/me
+        - /api/items
+        - /api/admin
+      denied_paths: []
